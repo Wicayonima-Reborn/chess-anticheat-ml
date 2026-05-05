@@ -1,0 +1,24 @@
+# Virtual environment
+env/
+venv/
+
+# Python
+__pycache__/
+*.pyc
+
+# Database & data output
+data/
+*.db
+*.csv
+
+# Model
+models/
+*.joblib
+
+# Dataset besar
+*.pgn.zst
+*.pgn
+
+# IDE
+.vscode/
+.idea/

@@ -1,0 +1,6 @@
+python-chess==1.999
+numpy==1.26.4
+pandas==2.2.2
+scikit-learn==1.5.0
+joblib==1.4.0
+PySide6==6.6.1
