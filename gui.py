@@ -3,7 +3,7 @@ import chess
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QComboBox, QTextEdit, QGroupBox, QGridLayout,
-    QSplitter, QDialog, QDialogButtonBox
+    QSplitter, QDialog
 )
 from PySide6.QtCore import Qt, Signal, QPointF
 from PySide6.QtGui import QPainter, QColor, QFont
@@ -18,18 +18,16 @@ from config import STOCKFISH_PATH
 init_db()
 
 
-# ======================= Dialog Promosi =======================
 class PromotionDialog(QDialog):
-    """Dialog kecil untuk memilih buah promosi."""
+    """Dialog to choose a promotion piece."""
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Promotion")
-        self.selected_piece = chess.QUEEN  # default
+        self.selected_piece = chess.QUEEN
 
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Choose promotion piece:"))
 
-        # Tombol dengan simbol Unicode
         pieces = [
             ("Queen ♕", chess.QUEEN),
             ("Rook ♖", chess.ROOK),
@@ -46,10 +44,10 @@ class PromotionDialog(QDialog):
         self.accept()
 
 
-# ======================= Papan Catur =======================
 class ChessBoardWidget(QWidget):
+    """Custom widget that draws the chess board and handles mouse interaction."""
     piece_selected = Signal(int, int)
-    move_made = Signal(str)             # UCI
+    move_made = Signal(str)             # UCI move
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -94,7 +92,7 @@ class ChessBoardWidget(QWidget):
                 else:
                     painter.fillRect(*rect, dark)
 
-                # Konversi visual → square sesungguhnya
+                # Convert visual row/col to actual chess square
                 if not self.flipped:
                     file = col_vis
                     rank = 7 - row_vis
@@ -110,12 +108,11 @@ class ChessBoardWidget(QWidget):
                 elif square == self.hover_square:
                     painter.fillRect(*rect, hov)
 
-        # Gambar bidak
         painter.setFont(QFont("Arial", int(sq_size * 0.75), QFont.Bold))
         piece_map = self.board.piece_map()
         for square, piece in piece_map.items():
             file = chess.square_file(square)
-            rank = chess.square_rank(square)   # 0 = rank 1
+            rank = chess.square_rank(square)
             if not self.flipped:
                 col_vis = file
                 row_vis = 7 - rank
@@ -129,6 +126,7 @@ class ChessBoardWidget(QWidget):
         painter.end()
 
     def _pos_to_square(self, pos: QPointF):
+        """Map mouse position to a chess.Square, accounting for board flip."""
         size = min(self.width(), self.height())
         sq_size = size / 8.0
         if pos.x() < 0 or pos.y() < 0 or pos.x() >= size or pos.y() >= size:
@@ -153,7 +151,6 @@ class ChessBoardWidget(QWidget):
             return
 
         if self.selected_square is not None:
-            # Coba langkah biasa dulu
             move = chess.Move(self.selected_square, square)
             if move in self.board.legal_moves:
                 self.move_made.emit(move.uci())
@@ -162,7 +159,7 @@ class ChessBoardWidget(QWidget):
                 self.update()
                 return
 
-            # Cek apakah ini langkah promosi (pion ke baris terakhir)
+            # Check for promotion moves
             promotion_moves = [
                 chess.Move(self.selected_square, square, promotion=p)
                 for p in [chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT]
@@ -170,7 +167,6 @@ class ChessBoardWidget(QWidget):
             legal_promotions = [m for m in promotion_moves if m in self.board.legal_moves]
 
             if legal_promotions:
-                # Tampilkan dialog pilihan
                 dlg = PromotionDialog(self)
                 if dlg.exec() == QDialog.Accepted:
                     chosen_piece = dlg.selected_piece
@@ -182,12 +178,11 @@ class ChessBoardWidget(QWidget):
                         self.update()
                         return
 
-            # Tidak legal, hapus seleksi
+            # Invalid move or cancelled, clear selection
             self.selected_square = None
             self.highlight_squares = []
             self.update()
         else:
-            # Pilih bidak sendiri
             piece = self.board.piece_at(square)
             if piece and piece.color == self.board.turn:
                 self.selected_square = square
@@ -210,8 +205,8 @@ class ChessBoardWidget(QWidget):
         self.update()
 
 
-# ======================= Panel Kontrol =======================
 class ControlPanel(QWidget):
+    """Sidebar panel with agent selection, controls, and detection output."""
     new_game_clicked = Signal()
     next_move_clicked = Signal()
     flip_clicked = Signal()
@@ -280,8 +275,8 @@ class ControlPanel(QWidget):
         return self.white_agent.currentText(), self.black_agent.currentText()
 
 
-# ======================= Jendela Utama =======================
 class MainWindow(QMainWindow):
+    """Main application window."""
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Chess Adversarial Lab")
@@ -341,10 +336,10 @@ class MainWindow(QMainWindow):
             return TacticalAssistAgent(name=f"Tactical_{color}")
         elif name == "Noise Agent":
             return NoiseInjectionAgent(name=f"Noise_{color}")
-        else:
-            return HumanProxyAgent()
+        return HumanProxyAgent()
 
     def next_move(self):
+        """Request a move from the current non‑human agent."""
         if not self.game_active or self.board.is_game_over():
             return
         agent = self.white_agent if self.board.turn == chess.WHITE else self.black_agent
@@ -354,22 +349,20 @@ class MainWindow(QMainWindow):
         try:
             move = agent.get_move(self.board)
             if move is None:
-                self.log("Bot returned no move (None). Check engine.")
+                self.log("Bot returned no move (None).")
                 return
             if move not in self.board.legal_moves:
-                self.log(f"Bot returned illegal move: {move.uci()}. Skipping.")
+                self.log(f"Bot illegal move: {move.uci()}")
                 return
             self.apply_move(move)
         except Exception as e:
             self.log(f"Bot error: {e}")
-            # Opsional: ganti ke random legal move agar game tetap jalan
-            # move = random.choice(list(self.board.legal_moves))
-            # self.apply_move(move)
 
         if self.board.is_game_over():
             self.end_game()
 
     def handle_human_move(self, uci):
+        """Process a move coming from the board widget (human player)."""
         if not self.game_active or self.board.is_game_over():
             return
         agent = self.white_agent if self.board.turn == chess.WHITE else self.black_agent
@@ -381,10 +374,11 @@ class MainWindow(QMainWindow):
                 self.apply_move(move)
             else:
                 self.log("Illegal move.")
-        except:
+        except Exception:
             pass
 
     def apply_move(self, move):
+        """Push a legal move to the board, extract features, and run detection."""
         try:
             import chess.engine as ce
             with ce.SimpleEngine.popen_uci(STOCKFISH_PATH) as engine:
@@ -397,7 +391,9 @@ class MainWindow(QMainWindow):
         uci = move.uci()
         self.board.push(move)
         self.board_widget.set_board(self.board.fen())
-        self.log(f"{self.board.fullmove_number}.{'...' if self.board.turn == chess.WHITE else '.'} {uci}  (CPL={cpl:.1f})")
+        self.log(f"{self.board.fullmove_number}."
+                 f"{'...' if self.board.turn == chess.WHITE else '.'} "
+                 f"{uci}  (CPL={cpl:.1f})")
 
         if self.model:
             label, proba = predict_move([cpl, sim, entropy, spike], self.model)

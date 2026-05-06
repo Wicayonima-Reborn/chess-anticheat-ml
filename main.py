@@ -1,18 +1,20 @@
 import argparse
+import random
 from engine_arena import ChessArena
-from attacker_simulation import (FullEngineAgent, TacticalAssistAgent,
-                                 NoiseInjectionAgent, HumanProxyAgent,
-                                 MixedHumanAgent)
+from attacker_simulation import (
+    FullEngineAgent, TacticalAssistAgent,
+    NoiseInjectionAgent, HumanProxyAgent, MixedHumanAgent
+)
 from data_collector import init_db
 from anti_cheat_detector import train_model, predict_move, load_model
-import random
+
 
 def run_simulation(num_games, mode="train"):
     init_db()
 
     if mode == "interactive":
         print("=== Interactive Mode ===")
-        print("Pilih lawan: 1. Full Engine, 2. Tactical Assist, 3. Noisy Bot")
+        print("Choose opponent: 1. Full Engine  2. Tactical Assist  3. Noisy Bot")
         choice = input("> ")
         if choice == "1":
             opponent = FullEngineAgent()
@@ -25,13 +27,15 @@ def run_simulation(num_games, mode="train"):
             opp_label = "NoiseAgent"
 
         human = HumanProxyAgent()
-        arena = ChessArena(white_agent=human, black_agent=opponent) if random.choice([True, False]) else ChessArena(white_agent=opponent, black_agent=human)
+        if random.choice([True, False]):
+            arena = ChessArena(white_agent=human, black_agent=opponent)
+        else:
+            arena = ChessArena(white_agent=opponent, black_agent=human)
 
         def human_move(board):
             print(board)
-            print("Legal moves:", [move.uci() for move in board.legal_moves])
-            uci = input("Your move (UCI): ").strip()
-            return uci
+            print("Legal moves:", [m.uci() for m in board.legal_moves])
+            return input("Your move (UCI): ").strip()
 
         result, log, board = arena.play_game(human_move_callback=human_move)
         print("Result:", result)
@@ -68,40 +72,41 @@ def run_simulation(num_games, mode="train"):
                                   result)
             print(f"Game {i+1}/{num_games} complete: {result}")
         except Exception as e:
-            print(f"Game {i+1} failed with error: {e}. Skipping.")
+            print(f"Game {i+1} failed: {e}. Skipping.")
         finally:
-            # Pastikan engine agent ditutup
             if white:
                 white.close()
             if black:
                 black.close()
 
-    print("Data collection selesai. Melatih model...")
+    print("Data collection finished. Training model...")
     train_model()
+
 
 def detect_cheating(move_features):
     model = load_model()
     if model:
         label, proba = predict_move(move_features, model)
-        print(f"Prediksi: {label}, Confidence: {max(proba):.2f}")
+        print(f"Prediction: {label}, Confidence: {max(proba):.2f}")
     else:
-        print("Model belum dilatih. Jalankan training dulu.")
+        print("Model not trained yet. Run training first.")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Chess Adversarial Lab")
     subparsers = parser.add_subparsers(dest="command")
 
-    parser_sim = subparsers.add_parser("simulate", help="Kumpulkan data game")
-    parser_sim.add_argument("--games", type=int, default=10, help="Jumlah game simulasi")
-    parser_sim.add_argument("--interactive", action="store_true", help="Main manual vs bot")
+    sim_parser = subparsers.add_parser("simulate", help="Collect game data")
+    sim_parser.add_argument("--games", type=int, default=10, help="Number of games")
+    sim_parser.add_argument("--interactive", action="store_true", help="Play manually vs bot")
 
-    parser_detect = subparsers.add_parser("detect", help="Deteksi satu move (beri fitur manual)")
-    parser_detect.add_argument("--cpl", type=float, required=True)
-    parser_detect.add_argument("--sim", type=float, required=True)
-    parser_detect.add_argument("--entropy", type=float, required=True)
-    parser_detect.add_argument("--spike", type=float, required=True)
+    detect_parser = subparsers.add_parser("detect", help="Detect a single move")
+    detect_parser.add_argument("--cpl", type=float, required=True)
+    detect_parser.add_argument("--sim", type=float, required=True)
+    detect_parser.add_argument("--entropy", type=float, required=True)
+    detect_parser.add_argument("--spike", type=float, required=True)
 
-    parser_train = subparsers.add_parser("train", help="Latih model dari data yang ada")
+    subparsers.add_parser("train", help="Train the model from existing data")
 
     args = parser.parse_args()
 
@@ -111,5 +116,5 @@ if __name__ == "__main__":
         detect_cheating([args.cpl, args.sim, args.entropy, args.spike])
     elif args.command == "train":
         train_model()
-    else:   
-        print("Gunakan: simulate, detect, atau train")
+    else:
+        print("Usage: simulate | detect | train")

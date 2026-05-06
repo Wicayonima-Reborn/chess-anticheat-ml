@@ -6,11 +6,12 @@ import io
 from config import DATABASE_PATH, STOCKFISH_PATH, ENGINE_TIME_LIMIT
 from data_collector import extract_features
 
+
 def fill_missing_features(limit_games=50):
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
-    # Ambil game_id unik yang punya move dengan fitur 0
+    # Find game IDs that have moves with all-zero features
     cursor.execute("""
         SELECT DISTINCT game_id
         FROM move_features
@@ -24,7 +25,7 @@ def fill_missing_features(limit_games=50):
     game_ids = [row[0] for row in cursor.fetchall()]
 
     if not game_ids:
-        print("Tidak ada game yang perlu diisi fiturnya.")
+        print("No games need feature filling.")
         conn.close()
         return
 
@@ -41,7 +42,10 @@ def fill_missing_features(limit_games=50):
 
             board = game.board()
             moves = list(game.mainline_moves())
-            cursor.execute("SELECT id, move_san FROM move_features WHERE game_id = ? ORDER BY move_number", (gid,))
+            cursor.execute(
+                "SELECT id, move_san FROM move_features WHERE game_id = ? ORDER BY move_number",
+                (gid,)
+            )
             move_rows = cursor.fetchall()
 
             if len(moves) != len(move_rows):
@@ -61,14 +65,15 @@ def fill_missing_features(limit_games=50):
                         WHERE id = ?
                     """, (cpl, sim, ent, spike, move_id))
                 except Exception as e:
-                    print(f"Error game {gid} move {move_san}: {e}")
+                    print(f"Error on game {gid} move {move_san}: {e}")
                 board.push(move_obj)
             conn.commit()
-            print(f"Game {gid} selesai.")
+            print(f"Game {gid} complete.")
     finally:
         engine.quit()
         conn.close()
-    print("✅ Selesai mengisi fitur.")
+    print("Feature filling complete.")
+
 
 if __name__ == "__main__":
     fill_missing_features(limit_games=50)

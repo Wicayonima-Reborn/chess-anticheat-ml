@@ -1,24 +1,24 @@
 import argparse
+import random
+import time
+import chess.engine
 from engine_arena import ChessArena
 from attacker_simulation import FullEngineAgent, TacticalAssistAgent, NoiseInjectionAgent
 from data_collector import init_db
-import random
-import chess.engine
-import time
-import config   # ambil STOCKFISH_PATH dari config
+import config
+
 
 def run_engine_only(total_games, time_limit=0.2):
-    # Test engine
+    """Generate engine‑vs‑engine games to collect engine‑labeled moves."""
     try:
         test_engine = chess.engine.SimpleEngine.popen_uci(config.STOCKFISH_PATH)
         test_engine.quit()
     except Exception as e:
-        print(f"Stockfish tidak bisa dijalankan: {e}")
+        print(f"Stockfish unavailable: {e}")
         return
 
     init_db()
     agents = [FullEngineAgent, TacticalAssistAgent, NoiseInjectionAgent]
-
     original_limit = config.ENGINE_TIME_LIMIT
     config.ENGINE_TIME_LIMIT = time_limit
 
@@ -44,11 +44,12 @@ def run_engine_only(total_games, time_limit=0.2):
 
     config.ENGINE_TIME_LIMIT = original_limit
 
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--games", type=int, default=50)
-    parser.add_argument("--fast", action="store_true")
+    parser = argparse.ArgumentParser(description="Collect engine vs engine game data")
+    parser.add_argument("--games", type=int, default=50, help="Number of games to play")
+    parser.add_argument("--fast", action="store_true", help="Use 0.05s engine time limit")
     args = parser.parse_args()
     time_limit = 0.05 if args.fast else 0.2
-    print(f"Menggunakan ENGINE_TIME_LIMIT = {time_limit}")
+    print(f"ENGINE_TIME_LIMIT = {time_limit}")
     run_engine_only(args.games, time_limit)

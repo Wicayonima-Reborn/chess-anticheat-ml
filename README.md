@@ -1,68 +1,73 @@
 # Chess Anti-Cheat ML
 
-A machine learning project for detecting engine-like behavior in chess games.
-
-Built for research, experimentation, and portfolio purposes — not for cheating or abuse.
+A supervised machine learning project to detect engine-like behavior in chess games.
+Built for defensive research, educational purposes, and portfolio demonstration.
 
 ## Overview
 
-`Chess Anti-Cheat ML` is a supervised learning project designed to analyze chess moves and identify patterns that resemble engine assistance. The system combines simulated adversarial agents, real human game data, and machine learning models to explore how anti-cheat systems can detect suspicious gameplay behavior.
+This system uses a Random Forest classifier trained on behavioral features extracted from chess moves.
+It can differentiate between human play and engine-assisted play by analyzing:
+
+- **Centipawn loss** – how much a move deviates from the best engine move
+- **Engine similarity** – whether the move matches the engine's top choice
+- **Move entropy** – uncertainty across top candidate moves
+- **Tactical spike** – sudden evaluation swings after a move
+
+The project includes simulated adversarial agents, real human game data from Lichess, a balancing engine‑vs‑engine generator, and a real‑time detection GUI.
 
 ## Features
 
-* Simulate multiple player behaviors:
-
-  * Full Engine
-  * Tactical Assist
-  * Noise Injection
-  * Mixed Human
-* Train a Random Forest classifier using behavioral features:
-
-  * Centipawn loss
-  * Engine similarity
-  * Move entropy
-  * Tactical spike detection
-* Import real human games from the Lichess database
-* Generate additional engine-vs-engine games for dataset balancing
-* Real-time move detection interface using PySide6
-* Performance statistics and training analysis tools
+- Simulate multiple agent behaviors: Full Engine, Tactical Assist, Noise Injection, Mixed Human
+- Import real human games from the Lichess Open Database (PGN `.zst`)
+- Balance datasets with fast engine‑only simulations
+- Train a Random Forest model and evaluate with precision/recall
+- GUI to play against bots and see live move predictions
+- Statistics script to monitor dataset composition
 
 ## Tech Stack
 
-* Python
-* Stockfish
-* scikit-learn
-* pandas
-* numpy
-* PySide6
-* python-chess
+- Python 3.10+
+- Stockfish chess engine
+- scikit-learn, pandas, numpy
+- PySide6 (GUI)
+- python-chess
 
 ## Installation
 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/yourusername/chess-anti-cheat-ml.git
-cd chess-anti-cheat-ml
+git clone https://github.com/your-username/chess-anticheat-ml.git
+cd chess-anticheat-ml
 ```
 
-### 2. Install dependencies
+### 2. Set up a virtual environment (recommended)
+
+```bash
+python -m venv env
+source env/bin/activate        # Linux/macOS
+env\Scripts\activate           # Windows
+```
+
+### 3. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Download Stockfish
+### 4. Download and configure Stockfish
 
-Download Stockfish from:
+- Download the Stockfish engine from [stockfishchess.org/download](https://stockfishchess.org/download/)
+- Place the executable in a known location
+- Set the `STOCKFISH_PATH` environment variable, or edit `config.py` to point to your binary:
 
-stockfishchess.org
+```python
+STOCKFISH_PATH = os.getenv("STOCKFISH_PATH", "stockfish")
+```
 
-Then configure the engine path inside `config.py`.
+If you don't set the environment variable, the code will look for `stockfish` in your system PATH.
 
-### 4. Prepare project folders
-
-Create the required folders if they do not exist:
+### 5. Prepare folders
 
 ```bash
 mkdir data models
@@ -70,17 +75,36 @@ mkdir data models
 
 ## Usage
 
-### Collect training data
+### Generate training data (simulated human vs engine)
 
 ```bash
 python main.py simulate --games 100
 ```
 
-### Generate engine-only games
+This creates 100 games (90% Human vs Engine) and saves them to the database.
+
+### Import real human games from Lichess (optional)
+
+1. Download a PGN `.zst` file from [database.lichess.org](https://database.lichess.org/) (choose a standard chess month, e.g., November 2015).
+2. Import games without computing features (fast):
 
 ```bash
-python simulate_engine_only.py --games 50 --fast
+python import_fast.py path/to/file.pgn.zst --games 500
 ```
+
+3. Compute features for the imported games (can take time):
+
+```bash
+python fill_features.py
+```
+
+### Add more engine-only data
+
+```bash
+python simulate_engine_only.py --games 200 --fast
+```
+
+This runs engine‑vs‑engine matches quickly to increase engine sample count.
 
 ### Train the model
 
@@ -88,48 +112,34 @@ python simulate_engine_only.py --games 50 --fast
 python main.py train
 ```
 
-### Launch GUI
+### Launch the GUI
 
 ```bash
 python gui.py
 ```
 
-### View statistics
+Play as Human against any agent and watch live detection results.
+
+### Check dataset statistics
 
 ```bash
 python stats.py
 ```
 
-## Dataset
+Shows game counts, move counts, and Human:Engine ratio.
 
-Training data currently includes:
+## Customization for Your Machine
 
-* Approximately 500 curated games
-* Around 32,000 analyzed moves
-* Human to Engine ratio of approximately 2.3:1
+- **Stockfish path**: Either set the environment variable `STOCKFISH_PATH` to your binary, or edit `config.py` directly.
+- **Database location**: Default is `data/games.db`. Change `DATABASE_PATH` in `config.py` if needed.
+- **Engine time limit**: Adjust `ENGINE_TIME_LIMIT` in `config.py` to trade off speed vs. accuracy (default 0.2 seconds).
+- **Model class weights**: Edit `anti_cheat_detector.py` if you want to bias the model toward detecting engines.
 
-Real human move data is sourced from the Lichess Open Database.
+## Important Notes
 
-## Project Structure
-
-```bash
-.
-├── data/
-├── models/
-├── main.py
-├── gui.py
-├── stats.py
-├── simulate_engine_only.py
-├── config.py
-├── requirements.txt
-└── README.md
-```
-
-## Notes
-
-* This project is intended for defensive research and educational purposes.
-* It is not designed for cheating or bypassing fair-play systems.
-* Predictions generated by the model should be treated as probabilistic analysis, not absolute judgments.
+- This project is for **defensive research and education only**. It is not intended to cheat or bypass fair‑play systems.
+- The model's predictions are probabilistic estimates, not absolute judgments.
+- Data imported from Lichess is under CC0 license.
 
 ## License
 

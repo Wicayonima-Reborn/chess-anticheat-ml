@@ -3,14 +3,12 @@ import sqlite3
 conn = sqlite3.connect("data/games.db")
 c = conn.cursor()
 
-# --------- Games ---------
 c.execute("SELECT COUNT(*) FROM games WHERE white_label='Human' OR black_label='Human'")
 human_games = c.fetchone()[0]
 
 c.execute("SELECT COUNT(*) FROM games WHERE white_label='Engine' AND black_label='Engine'")
 engine_games = c.fetchone()[0]
 
-# --------- Moves ---------
 c.execute("""
     SELECT COUNT(*) FROM move_features mf
     JOIN games g ON mf.game_id = g.id
