@@ -3,11 +3,11 @@ import pandas as pd
 import numpy as np
 import chess
 import chess.engine
-import chess.pgn
-import io
 from config import DATABASE_PATH, STOCKFISH_PATH, ENGINE_TIME_LIMIT
 
+
 def init_db():
+    """Create tables if they don't exist."""
     conn = sqlite3.connect(DATABASE_PATH)
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS games (
@@ -35,20 +35,22 @@ def init_db():
     conn.commit()
     conn.close()
 
+
 def extract_features(board_before, move, engine, time_limit=ENGINE_TIME_LIMIT):
     """
-    Hitung fitur per move. Jika terjadi error (timeout, dll), kembalikan nilai nol.
+    Compute centipawn loss, engine similarity, move entropy, and tactical spike.
+    Returns (0.0, 0.0, 0.0, 0.0) on any error.
     """
     try:
-        # Evaluasi sebelum move
         info_before = engine.analyse(board_before, chess.engine.Limit(time=time_limit))
         score_before = info_before["score"].relative.score(mate_score=10000) or 0
 
-        # Dapatkan top-5 moves beserta skor
-        multipv_info = engine.analyse(board_before, chess.engine.Limit(time=time_limit), multipv=5)
+        multipv_info = engine.analyse(
+            board_before, chess.engine.Limit(time=time_limit), multipv=5
+        )
         top_moves = []
         for pv in multipv_info:
-            if "pv" in pv and len(pv["pv"]) > 0:
+            if "pv" in pv and pv["pv"]:
                 move_obj = pv["pv"][0]
                 score = pv["score"].relative.score(mate_score=10000) or 0
                 top_moves.append((move_obj, score))
@@ -56,15 +58,11 @@ def extract_features(board_before, move, engine, time_limit=ENGINE_TIME_LIMIT):
         if not top_moves:
             return 0.0, 0.0, 0.0, 0.0
 
-        best_move = top_moves[0][0]
-        best_score = top_moves[0][1]
-        chosen_score = None
-        for m, s in top_moves:
-            if m == move:
-                chosen_score = s
-                break
+        best_move, best_score = top_moves[0]
+        chosen_score = next(
+            (s for m, s in top_moves if m == move), None
+        )
         if chosen_score is None:
-            # Move tidak di top-5, estimasi dari evaluasi setelah move
             board_after = board_before.copy()
             board_after.push(move)
             info_after = engine.analyse(board_after, chess.engine.Limit(time=time_limit))
@@ -73,13 +71,11 @@ def extract_features(board_before, move, engine, time_limit=ENGINE_TIME_LIMIT):
         centipawn_loss = best_score - chosen_score
         engine_similarity = 1.0 if move == best_move else 0.0
 
-        # Entropi dari distribusi skor top-5
         scores = np.array([s for _, s in top_moves])
-        probs = np.exp(scores - np.max(scores))
+        probs = np.exp(scores - scores.max())
         probs /= probs.sum()
         entropy = -np.sum(probs * np.log(probs + 1e-10))
 
-        # Tactical spike: perubahan evaluasi setelah move
         board_after = board_before.copy()
         board_after.push(move)
         info_after = engine.analyse(board_after, chess.engine.Limit(time=time_limit))
@@ -88,7 +84,5 @@ def extract_features(board_before, move, engine, time_limit=ENGINE_TIME_LIMIT):
 
         return centipawn_loss, engine_similarity, entropy, tactical_spike
 
-    except Exception as e:
-        # Catching any exception, termasuk TimeoutError, EngineTerminatedError, dll.
-        print(f"Feature extraction error: {e}. Returning zeros.")
+    except Exception:
         return 0.0, 0.0, 0.0, 0.0
