@@ -8,11 +8,7 @@ import sqlite3
 from config import DATABASE_PATH, MODEL_PATH, DATASET_CSV
 
 def build_dataset():
-    """
-    Ambil data dari database dan bentuk DataFrame untuk training.
-    Setiap baris = satu move dari satu game.
-    Kolom: centipawn_loss, engine_similarity, move_entropy, tactical_spike, label (Human/Engine)
-    """
+    """Extract labeled move features from the SQLite database."""
     conn = sqlite3.connect(DATABASE_PATH)
     query = """
     SELECT mf.centipawn_loss, mf.engine_similarity, mf.move_entropy, mf.tactical_spike,
@@ -29,17 +25,16 @@ def build_dataset():
     """
     df = pd.read_sql_query(query, conn)
     conn.close()
-    # Encoding label: Human -> 0, Engine -> 1
     df['label'] = df['label'].map({'Human': 0, 'Engine': 1})
     df.dropna(inplace=True)
     df.to_csv(DATASET_CSV, index=False)
     return df
 
 def train_model():
-    """Latih RandomForest dari dataset."""
+    """Train a Random Forest classifier and save the model."""
     df = build_dataset()
     if df.empty:
-        print("Dataset kosong. Jalankan beberapa simulasi arena dulu.")
+        print("Empty dataset. Run simulations first.")
         return None
     X = df[['centipawn_loss', 'engine_similarity', 'move_entropy', 'tactical_spike']]
     y = df['label']
@@ -47,28 +42,32 @@ def train_model():
     model = RandomForestClassifier(
         n_estimators=150,
         random_state=42,
-        class_weight={0: 1, 1: 2}   # memberi bobot 2x untuk kelas Engine
+        class_weight={0: 1, 1: 2}   # upweight engine class to reduce false negatives
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
     print(classification_report(y_test, y_pred, target_names=['Human', 'Engine']))
     joblib.dump(model, MODEL_PATH)
-    print(f"Model disimpan di {MODEL_PATH}")
+    print(f"Model saved to {MODEL_PATH}")
     return model
 
 def load_model():
+    """Load the trained model from disk."""
     try:
         return joblib.load(MODEL_PATH)
     except:
         return None
 
 def predict_move(move_features, model=None):
-    """Prediksi satu move: [centipawn_loss, engine_similarity, entropy, tactical_spike]"""
+    """
+    Predict a single move given its features.
+    Returns (label, probability array).
+    """
     if model is None:
         model = load_model()
     if model is None:
         return "No model", np.array([0.0, 0.0])
-    # Gunakan DataFrame agar sesuai dengan feature names saat training
+    # Wrap in DataFrame to match the feature names the model was trained on
     feat_df = pd.DataFrame(
         [move_features],
         columns=['centipawn_loss', 'engine_similarity', 'move_entropy', 'tactical_spike']
